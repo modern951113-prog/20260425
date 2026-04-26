@@ -34,6 +34,19 @@ let stickFigurePhase = 0;
 let particles = [];
 const NUM_PARTICLES = 500;
 
+// --- 世界二特效變數 ---
+let jellyfishes = [];
+let bubbles = [];
+
+// --- 世界三特效變數 ---
+let windParticles = [];
+
+// --- 世界四特效變數 ---
+let forestDecorations = [];
+
+// --- 流星特效變數 ---
+let shootingStars = [];
+
 // --- 離屏緩衝區 (Off-screen buffer) ---
 let worksBuffer;
 
@@ -59,8 +72,37 @@ const iconImagePaths = [
   'assets/天蠍座.png',
   'assets/天平座.png', // 修正：依照您的要求，將「天秤座」改為「天平座」
   'assets/鳳梨屋.png', // 新增
-  'assets/石頭屋.png'  // 新增
+  'assets/石頭屋.png',  // 新增
+  'assets/天空之城.png', // 新增
+  'assets/刀劍神諭.png',   // 新增
+  'assets/阿寶.png', // 新增
+  'assets/老皮.png',  // 新增
+  'assets/水母.png',   // 新增
+  'assets/飛機.png',
+  'assets/桐人.png',
+  'assets/黏.png',
+  'assets/泡泡糖.png',
+  'assets/薄荷糖.png',
+  'assets/公主.png',
+  'assets/B某.png',
+  'assets/火焰.png',
+  'assets/阿鵝.png',
+  'assets/皮妹.png',
+  'assets/冰霸.png',
+  'assets/吸血鬼.png' // 新增
 ];
+
+// --- Music ---
+let music1;
+const music1Path = 'assets/音樂1(你的).mp3'; // 假設是 .mp3 格式
+let music2;
+const music2Path = 'assets/音樂3(海綿).mp3';
+let music3_1, music3_2; // For World 3
+const music3_1Path = 'assets/音樂4(天空).mp3';
+const music3_2Path = 'assets/音樂5(刀劍).mp3';
+let music4; // For World 4
+const music4Path = 'assets/音樂2(探險).mp3';
+
 // --- UI Elements ---
 let portals = [];
 let backButton;
@@ -106,6 +148,193 @@ class StarParticle {
   }
 }
 
+class ShootingStar {
+  constructor() {
+    // 從畫布頂部或左側隨機位置開始
+    if (random() > 0.5) {
+      this.x = random(width);
+      this.y = -10;
+    } else {
+      this.x = -10;
+      this.y = random(height * 0.7);
+    }
+    this.speed = random(10, 20);
+    this.angle = PI / 4; // 固定角度，看起來像流星雨
+    this.history = [];
+    this.len = random(30, 50); // 拖尾長度
+  }
+
+  isOffscreen() {
+    return (this.y > height + 50 || this.x > width + 50);
+  }
+
+  update() {
+    this.x += this.speed * cos(this.angle);
+    this.y += this.speed * sin(this.angle);
+    this.history.push(createVector(this.x, this.y));
+    if (this.history.length > this.len) {
+      this.history.splice(0, 1);
+    }
+  }
+
+  show(pg) {
+    pg.noStroke();
+    for (let i = 0; i < this.history.length; i++) {
+      let pos = this.history[i];
+      let alpha = map(i, 0, this.history.length, 0, 200);
+      pg.fill(255, 255, 230, alpha); // 帶點暖黃色的白光
+      let size = map(i, 0, this.history.length, 0, 3);
+      pg.ellipse(pos.x, pos.y, size, size);
+    }
+  }
+}
+
+class WindParticle {
+  constructor(type) {
+    // 85% 是流動的線條，15% 是氣旋
+    this.type = type || (random() > 0.85 ? 'swirl' : 'line');
+    this.y = random(height);
+    this.x = random(-200, -50);
+    this.speed = random(2, 6);
+    this.alpha = random(50, 120); // 讓粒子更柔和
+
+    if (this.type === 'line') {
+      this.history = [];
+      this.len = random(30, 60); // 拖尾的長度
+      this.wobble = random(0.01, 0.03); // 軌跡的彎曲度
+      this.wobbleHeight = random(0.5, 1.5); // 軌跡的上下擺幅
+    } else { // swirl
+      this.radius = random(15, 40);
+      this.angle = random(TWO_PI);
+      this.rotSpeed = random(0.02, 0.05);
+    }
+  }
+
+  isOffscreen() {
+    return this.x > width + (this.len * this.speed || this.radius || 0);
+  }
+
+  update() {
+    this.x += this.speed;
+    if (this.type === 'line') {
+      this.y += sin(this.x * this.wobble) * this.wobbleHeight;
+      this.history.push(createVector(this.x, this.y));
+      if (this.history.length > this.len) {
+        this.history.splice(0, 1);
+      }
+    } else { // swirl
+      this.angle += this.rotSpeed;
+    }
+  }
+
+  show(pg) {
+    if (this.type === 'line') {
+      pg.noFill();
+      pg.beginShape();
+      for (let i = 0; i < this.history.length; i++) {
+        let pos = this.history[i];
+        let currentAlpha = map(i, 0, this.history.length, 0, this.alpha);
+        pg.stroke(255, currentAlpha);
+        pg.strokeWeight(map(i, 0, this.history.length, 0, 1.5));
+        pg.vertex(pos.x, pos.y);
+      }
+      pg.endShape();
+    } else { // swirl
+      pg.push();
+      pg.translate(this.x, this.y);
+      pg.rotate(this.angle);
+      pg.noFill();
+      pg.stroke(255, this.alpha * 0.7); // 讓氣旋更透明
+      pg.strokeWeight(1.5);
+      pg.arc(0, 0, this.radius, this.radius, 0, PI * 1.5);
+      pg.arc(0, 0, this.radius * 0.6, this.radius * 0.6, PI, PI * 2.5);
+      pg.pop();
+    }
+  }
+}
+
+class Jellyfish {
+  constructor(img, avoidAreas = []) {
+    this.img = img;
+    this.size = random(80, 150);
+    this.bobOffset = random(TWO_PI);
+    this.alpha = random(100, 180);
+
+    let validPosition = false;
+    let attempts = 0;
+    while (!validPosition && attempts < 50) {
+      this.x = random(width);
+      this.y = random(height * 0.2, height * 0.8);
+
+      let overlaps = false;
+      const jellyBox = {
+        x: this.x - this.size / 2,
+        y: this.y - this.size / 2,
+        w: this.size,
+        h: this.size
+      };
+
+      for (const area of avoidAreas) {
+        if (jellyBox.x < area.x + area.w && jellyBox.x + jellyBox.w > area.x && jellyBox.y < area.y + area.h && jellyBox.y + jellyBox.h > area.y) {
+          overlaps = true;
+          break;
+        }
+      }
+
+      if (!overlaps) {
+        validPosition = true;
+      }
+      attempts++;
+    }
+  }
+
+  update() {
+    // 緩慢上下漂浮
+    this.y += sin(frameCount * 0.02 + this.bobOffset) * 0.3;
+  }
+
+  show(pg) {
+    pg.push();
+    pg.tint(255, this.alpha);
+    pg.imageMode(CENTER);
+    let imgRatio = this.img.height / this.img.width;
+    pg.image(this.img, this.x, this.y, this.size, this.size * imgRatio);
+    pg.noTint();
+    pg.pop();
+  }
+}
+
+class Bubble {
+  constructor() {
+    this.x = random(width);
+    this.y = height + random(50);
+    this.size = random(5, 30);
+    this.speedY = random(1, 3);
+    this.wobbleX = random(0.5, 2);
+    this.lifespan = 255;
+  }
+
+  isOffscreen() {
+    return this.y < -this.size || this.lifespan <= 0;
+  }
+
+  update() {
+    this.y -= this.speedY;
+    this.x += sin(this.y * 0.05) * this.wobbleX;
+    // 氣泡越往上越透明
+    this.lifespan -= 1;
+  }
+
+  show(pg) {
+    pg.push();
+    pg.noFill();
+    pg.stroke(255, min(this.lifespan, 150)); // 限制最大透明度
+    pg.strokeWeight(2);
+    pg.ellipse(this.x, this.y, this.size);
+    pg.pop();
+  }
+}
+
 function preload() {
   // 載入所有背景圖片
   for (let path of bgImagePaths) {
@@ -115,6 +344,31 @@ function preload() {
   for (let path of iconImagePaths) {
     iconImages.push(loadImage(path));
   }
+
+  // 載入音樂
+  // 警告：中文檔名在網頁環境中非常容易出錯。如果音樂無法播放，
+  // 請務必將檔案重新命名為英文 (例如 music1.mp3) 並在此處同步修改路徑。
+  music1 = loadSound(music1Path, null, (err) => {
+    console.error(`錯誤：無法載入音樂 '${music1Path}'。`, err);
+  });
+  // 新增：載入世界二的音樂
+  // 警告：同樣，如果音樂無法播放，請務必將檔案重新命名為英文。
+  music2 = loadSound(music2Path, null, (err) => {
+    console.error(`錯誤：無法載入音樂 '${music2Path}'。`, err);
+  });
+  // 新增：載入世界三的音樂
+  // 警告：同樣，如果音樂無法播放，請務必將檔案重新命名為英文。
+  music3_1 = loadSound(music3_1Path, null, (err) => {
+      console.error(`錯誤：無法載入音樂 '${music3_1Path}'。`, err);
+  });
+  music3_2 = loadSound(music3_2Path, null, (err) => {
+      console.error(`錯誤：無法載入音樂 '${music3_2Path}'。`, err);
+  });
+  // 新增：載入世界四的音樂
+  // 警告：同樣，如果音樂無法播放，請務必將檔案重新命名為英文。
+  music4 = loadSound(music4Path, null, (err) => {
+      console.error(`錯誤：無法載入音樂 '${music4Path}'。`, err);
+  });
 
   // 提醒：請確保您已將 '星空3.png' 檔案放置在 'assets' 資料夾中
   if (bgImagePaths.length > 2 && !bgImages[2]) { // 檢查第三張圖片是否存在
@@ -151,6 +405,45 @@ function preload() {
   }
   if (iconImagePaths.length > 3 && !iconImages[3]) {
       console.error("錯誤：找不到 'assets/石頭屋.png'。");
+  }
+  if (iconImagePaths.length > 4 && !iconImages[4]) {
+      console.error("錯誤：找不到 'assets/天空之城.png'。");
+  }
+  if (iconImagePaths.length > 5 && !iconImages[5]) {
+      console.error("錯誤：找不到 'assets/刀劍神諭.png'。");
+  }
+  if (iconImagePaths.length > 6 && !iconImages[6]) {
+      console.error("錯誤：找不到 'assets/阿寶.png'。");
+  }
+  if (iconImagePaths.length > 7 && !iconImages[7]) {
+      console.error("錯誤：找不到 'assets/老皮.png'。");
+  }
+  if (iconImagePaths.length > 8 && !iconImages[8]) {
+      console.error("錯誤：找不到 'assets/水母.png'。");
+  }
+  if (iconImagePaths.length > 9 && !iconImages[9]) {
+      console.error("錯誤：找不到 'assets/飛機.png'。");
+  }
+  if (iconImagePaths.length > 10 && !iconImages[10]) {
+      console.error("錯誤：找不到 'assets/桐人.png'。");
+  }
+  // 新增：為世界四的裝飾物件做錯誤檢查
+  if (iconImagePaths.length > 11 && !iconImages[11]) { console.error("錯誤：找不到 'assets/黏.png'。"); }
+  if (iconImagePaths.length > 12 && !iconImages[12]) { console.error("錯誤：找不到 'assets/泡泡糖.png'。"); }
+  if (iconImagePaths.length > 13 && !iconImages[13]) { console.error("錯誤：找不到 'assets/薄荷糖.png'。"); }
+  if (iconImagePaths.length > 14 && !iconImages[14]) { console.error("錯誤：找不到 'assets/公主.png'。"); }
+  if (iconImagePaths.length > 15 && !iconImages[15]) { console.error("錯誤：找不到 'assets/B某.png'。"); }
+  if (iconImagePaths.length > 16 && !iconImages[16]) { console.error("錯誤：找不到 'assets/火焰.png'。"); }
+  if (iconImagePaths.length > 17 && !iconImages[17]) { console.error("錯誤：找不到 'assets/阿鵝.png'。"); }
+  if (iconImagePaths.length > 18 && !iconImages[18]) { console.error("錯誤：找不到 'assets/皮妹.png'。"); }
+  if (iconImagePaths.length > 19 && !iconImages[19]) { console.error("錯誤：找不到 'assets/冰霸.png'。"); }
+  if (iconImagePaths.length > 20 && !iconImages[20]) { console.error("錯誤：找不到 'assets/吸血鬼.png'。"); }
+
+  if (iconImagePaths.length > 9 && !iconImages[9]) {
+      console.error("錯誤：找不到 'assets/飛機.png'。");
+  }
+  if (iconImagePaths.length > 10 && !iconImages[10]) {
+      console.error("錯誤：找不到 'assets/桐人.png'。");
   }
 }
 
@@ -394,7 +687,7 @@ function drawHomePage(pg = this, checkHover = true) {
   pg.fill(255);
   pg.textSize(48);
   pg.textAlign(CENTER, CENTER);
-  pg.text('時空傳送門', pg.width / 2, pg.height * 0.1);
+  pg.text('今日 上哪走走?', pg.width / 2, pg.height * 0.1);
   pg.pop();
 
   // --- 繪製傳送門 (根據背景圖顯示不同風格) ---
@@ -500,6 +793,179 @@ function drawHomePage(pg = this, checkHover = true) {
 
 function drawWorksScreen() {
   drawWorksScreenBackground();
+
+  // 如果是世界一 (星空3背景)，則繪製流星
+  if (currentWorkGroupIndex === 0) {
+    // 每秒產生 1~3 顆流星
+    if (frameCount % 60 === 0) {
+      let num = floor(random(1, 4));
+      for (let i = 0; i < num; i++) {
+        shootingStars.push(new ShootingStar());
+      }
+    }
+
+    // 更新並繪製流星
+    for (let i = shootingStars.length - 1; i >= 0; i--) {
+      let star = shootingStars[i];
+      star.update();
+      star.show(this);
+      if (star.isOffscreen()) {
+        shootingStars.splice(i, 1);
+      }
+    }
+  }
+
+  // 如果是世界二 (海底背景)，則繪製水母和氣泡
+  if (currentWorkGroupIndex === 1) {
+    // 如果還沒有水母，就生成幾隻
+    if (jellyfishes.length === 0) {
+      let jellyfishImg = iconImages[8];
+      if (jellyfishImg) {
+        const avoidAreas = [workItems[0], workItems[1]];
+        for (let i = 0; i < 8; i++) { // 增加水母的數量
+          jellyfishes.push(new Jellyfish(jellyfishImg, avoidAreas));
+        }
+      }
+    }
+    // 更新並繪製水母
+    for (const jellyfish of jellyfishes) {
+      jellyfish.update();
+      jellyfish.show(this);
+    }
+
+    // 每隔一段時間產生新氣泡
+    if (frameCount % 15 === 0) {
+      bubbles.push(new Bubble());
+    }
+    // 更新並繪製氣泡
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      let bubble = bubbles[i];
+      bubble.update();
+      bubble.show(this);
+      if (bubble.isOffscreen()) {
+        bubbles.splice(i, 1);
+      }
+    }
+  }
+
+  // 如果是世界三 (天空背景)，則繪製額外圖片和風流動特效
+  if (currentWorkGroupIndex === 2) {
+    // 風流動特效
+    if (frameCount % 8 === 0) {
+      windParticles.push(new WindParticle());
+    }
+    for (let i = windParticles.length - 1; i >= 0; i--) {
+      let p = windParticles[i];
+      p.update();
+      p.show(this);
+      if (p.isOffscreen()) {
+        windParticles.splice(i, 1);
+      }
+    }
+
+    let planeImg = iconImages[9];
+    let kiritoImg = iconImages[10];
+
+    push();
+    imageMode(CENTER);
+    tint(255, 200); // 讓圖片稍微透明，更好地融入背景
+
+    if (planeImg) {
+      let imgRatio = planeImg.height / planeImg.width;
+      let imgW = 400;
+      // 修正：調整位置到左下角，避免與按鈕重疊
+      image(planeImg, width * 0.15, height * 0.7, imgW, imgW * imgRatio);
+    }
+    if (kiritoImg) {
+      let imgRatio = kiritoImg.height / kiritoImg.width;
+      // 修正：縮小圖片並調整位置到右上角
+      let imgW = 220;
+      image(kiritoImg, width * 0.85, height * 0.3, imgW, imgW * imgRatio);
+    }
+    pop();
+  }
+
+  // 如果是世界四 (森林背景)，則繪製裝飾物件
+  if (currentWorkGroupIndex === 3) {
+    if (forestDecorations.length === 0) {
+      // 定義按鈕區域以避免重疊
+      const btn1 = { x: width * 0.25 - workItemWidth / 2, y: height / 2 - workItemHeight / 2, w: workItemWidth, h: workItemHeight };
+      const btn2 = { x: width * 0.75 - workItemWidth / 2, y: height / 2 - workItemHeight / 2, w: workItemWidth, h: workItemHeight };
+      
+      const decoSize = 120; // 縮小圖片尺寸
+      const margin = decoSize / 2; // 圖片與邊界的距離
+
+      // 裝飾圖片從索引 11 開始
+      for (let i = 11; i < iconImages.length; i++) {
+        const img = iconImages[i];
+        if (img) {
+          let x, y;
+          let validPosition = false;
+          let attempts = 0; // 避免無限迴圈
+
+          while (!validPosition && attempts < 100) {
+            // 產生在螢幕範圍內的位置
+            x = random(margin, width - margin);
+            y = random(margin, height - margin);
+            
+            let overlaps = false;
+
+            // 檢查是否與按鈕重疊 (AABB collision detection)
+            const decoBox = { x: x - margin, y: y - margin, w: decoSize, h: decoSize };
+            if ( (decoBox.x < btn1.x + btn1.w && decoBox.x + decoBox.w > btn1.x && decoBox.y < btn1.y + btn1.h && decoBox.y + decoBox.h > btn1.y) ||
+                 (decoBox.x < btn2.x + btn2.w && decoBox.x + decoBox.w > btn2.x && decoBox.y < btn2.y + btn2.h && decoBox.y + decoBox.h > btn2.y) ) {
+              overlaps = true;
+            }
+            if (overlaps) {
+              attempts++;
+              continue;
+            }
+
+            // 檢查是否與其他已放置的裝飾重疊
+            for (const deco of forestDecorations) {
+              if (dist(x, y, deco.x, deco.y) < decoSize * 1.5) { // 確保間距更寬
+                overlaps = true;
+                break;
+              }
+            }
+            if (overlaps) {
+              attempts++;
+              continue;
+            }
+            
+            validPosition = true;
+          }
+
+          if (validPosition) {
+            forestDecorations.push({
+              img: img,
+              x: x,
+              y: y,
+              size: decoSize
+            });
+          }
+        }
+      }
+    }
+
+    // 繪製裝飾
+    push();
+    imageMode(CENTER);
+    for (const deco of forestDecorations) {
+      const imgRatio = deco.img.width / deco.img.height;
+      let imgW, imgH;
+      if (imgRatio > 1) { // 寬圖
+        imgW = deco.size;
+        imgH = deco.size / imgRatio;
+      } else { // 高圖
+        imgH = deco.size;
+        imgW = deco.size * imgRatio;
+      }
+      image(deco.img, deco.x, deco.y, imgW, imgH);
+    }
+    pop();
+  }
+
   drawWorksPage(this);
 }
 
@@ -608,6 +1074,80 @@ function drawWorksPage(pg, checkHover = true) {
       pg.textSize(40); // 再次放大文字
       pg.text(item.work.week, 0, 95); // 調整文字位置
       pg.pop();
+    } else if (currentWorkGroupIndex === 2) { // 世界三 (天空背景)
+      pg.push();
+      pg.translate(item.x + item.width / 2, item.y + item.height / 2);
+
+      let img;
+      if (item.work.week === "第五週") {
+        img = iconImages[4]; // 天空之城圖片
+      } else if (item.work.week === "第五週-2") {
+        img = iconImages[5]; // 刀劍神諭圖片
+      }
+
+      if (img) {
+        pg.imageMode(CENTER);
+        let imgRatio = img.width / img.height;
+        let maxSize = isHovered ? 250 : 240;
+        let imgW, imgH;
+        if (imgRatio > 1) {
+          imgW = maxSize;
+          imgH = maxSize / imgRatio;
+        } else {
+          imgH = maxSize;
+          imgW = maxSize * imgRatio;
+        }
+
+        if (isHovered) {
+          pg.drawingContext.shadowBlur = 20;
+          pg.drawingContext.shadowColor = color(200, 220, 255);
+        }
+        pg.image(img, 0, -60, imgW, imgH);
+        pg.drawingContext.shadowBlur = 0;
+      }
+
+      pg.noStroke();
+      pg.fill(isHovered ? 255 : 220);
+      pg.textSize(40);
+      pg.text(item.work.week, 0, 95);
+      pg.pop();
+    } else if (currentWorkGroupIndex === 3) { // 世界四 (森林背景)
+      pg.push();
+      pg.translate(item.x + item.width / 2, item.y + item.height / 2);
+
+      let img;
+      if (item.work.week === "第六週") {
+        img = iconImages[6]; // 阿寶圖片
+      } else if (item.work.week === "第六週-2") {
+        img = iconImages[7]; // 老皮圖片
+      }
+
+      if (img) {
+        pg.imageMode(CENTER);
+        let imgRatio = img.width / img.height;
+        let maxSize = isHovered ? 250 : 240;
+        let imgW, imgH;
+        if (imgRatio > 1) {
+          imgW = maxSize;
+          imgH = maxSize / imgRatio;
+        } else {
+          imgH = maxSize;
+          imgW = maxSize * imgRatio;
+        }
+
+        if (isHovered) {
+          pg.drawingContext.shadowBlur = 20;
+          pg.drawingContext.shadowColor = color(255, 255, 150); // Yellow glow
+        }
+        pg.image(img, 0, -60, imgW, imgH);
+        pg.drawingContext.shadowBlur = 0;
+      }
+
+      pg.noStroke();
+      pg.fill(isHovered ? 255 : 220);
+      pg.textSize(40);
+      pg.text(item.work.week, 0, 95);
+      pg.pop();
     } else {
       // 其他世界維持原本的矩形按鈕
       pg.fill(isHovered ? 'rgba(200, 200, 220, 0.9)' : 'rgba(220, 220, 240, 0.7)');
@@ -663,6 +1203,37 @@ function drawPortalTransition() {
       // 預先繪製完整的作品頁面到緩衝區
       drawWorksScreenBackground(worksBuffer); // 將背景繪製到緩衝區
       drawWorksPage(worksBuffer, false);     // 將 UI 繪製到緩衝區
+
+      // 如果進入世界一，開始播放音樂
+      if (currentWorkGroupIndex === 0 && music1.isLoaded() && !music1.isPlaying()) {
+        music1.loop();
+      }
+
+      // 如果進入世界二，開始播放音樂
+      if (currentWorkGroupIndex === 1 && music2.isLoaded() && !music2.isPlaying()) {
+        music2.loop();
+      }
+
+      // 如果進入世界三，開始播放音樂
+      if (currentWorkGroupIndex === 2 && music3_1.isLoaded() && music3_2.isLoaded()) {
+          if (!music3_1.isPlaying() && !music3_2.isPlaying()) {
+              // 設定循環播放邏輯
+              music3_1.onended(() => {
+                  music3_2.play();
+              });
+              music3_2.onended(() => {
+                  music3_1.play();
+              });
+
+              // 隨機播放第一首
+              if (random() > 0.5) { music3_1.play(); } else { music3_2.play(); }
+          }
+      }
+      // 如果進入世界四，開始播放音樂
+      if (currentWorkGroupIndex === 3 && music4.isLoaded() && !music4.isPlaying()) {
+        music4.loop();
+      }
+
       appState = 'worksZoomIn';
     }
 
@@ -738,6 +1309,50 @@ function mousePressed() {
     // 檢查是否點擊 "返回主頁" 按鈕
     if (mouseX > backButton.x && mouseX < backButton.x + backButton.w &&
         mouseY > backButton.y && mouseY < backButton.y + backButton.h) {
+      
+      // 如果音樂正在播放，則停止
+      if (music1.isPlaying()) {
+        music1.stop();
+      }
+      // 新增：如果世界二的音樂正在播放，也停止
+      if (music2.isPlaying()) {
+        music2.stop();
+      }
+      // 新增：如果世界三的音樂正在播放，也停止
+      if (music3_1.isPlaying()) {
+        music3_1.stop();
+        music3_1.onended(null); // 清除回呼，避免記憶體洩漏
+      }
+      if (music3_2.isPlaying()) {
+        music3_2.stop();
+        music3_2.onended(null); // 清除回呼
+      }
+      // 新增：如果世界四的音樂正在播放，也停止
+      if (music4.isPlaying()) {
+        music4.stop();
+      }
+
+      // 新增：清除世界二的特效物件
+      if (jellyfishes.length > 0) {
+        jellyfishes = [];
+        bubbles = [];
+      }
+
+      // 新增：清除世界三的風流動特效
+      if (windParticles.length > 0) {
+        windParticles = [];
+      }
+
+      // 新增：清除世界四的裝飾物件
+      if (forestDecorations.length > 0) {
+        forestDecorations = [];
+      }
+
+      // 新增：清除流星，避免回到主頁時還在畫
+      if (shootingStars.length > 0) {
+        shootingStars = [];
+      }
+
       appState = 'portalTransition';
       transitionStartTime = millis();
       currentWorkGroupIndex = -1;
@@ -829,6 +1444,40 @@ function initializePositions() {
       work: currentGroup[1]
     });
   } else if (currentWorkGroupIndex === 1) { // 世界二的佈局
+    // 左邊按鈕
+    workItems.push({
+      x: width * 0.25 - workItemWidth / 2,
+      y: height / 2 - workItemHeight / 2,
+      width: workItemWidth,
+      height: workItemHeight,
+      work: currentGroup[0]
+    });
+    // 右邊按鈕
+    workItems.push({
+      x: width * 0.75 - workItemWidth / 2,
+      y: height / 2 - workItemHeight / 2,
+      width: workItemWidth,
+      height: workItemHeight,
+      work: currentGroup[1]
+    });
+  } else if (currentWorkGroupIndex === 2) { // 世界三的佈局
+    // 左邊按鈕
+    workItems.push({
+      x: width * 0.25 - workItemWidth / 2,
+      y: height / 2 - workItemHeight / 2,
+      width: workItemWidth,
+      height: workItemHeight,
+      work: currentGroup[0]
+    });
+    // 右邊按鈕
+    workItems.push({
+      x: width * 0.75 - workItemWidth / 2,
+      y: height / 2 - workItemHeight / 2,
+      width: workItemWidth,
+      height: workItemHeight,
+      work: currentGroup[1]
+    });
+  } else if (currentWorkGroupIndex === 3) { // 世界四的佈局
     // 左邊按鈕
     workItems.push({
       x: width * 0.25 - workItemWidth / 2,
